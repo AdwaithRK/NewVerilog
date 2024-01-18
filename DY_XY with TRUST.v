@@ -309,6 +309,14 @@ module router_new(
   reg w_ak_s = 0;
   reg w_ak_t = 0;
  
+  
+  reg r_e_1 = 1 ;                         // to identify 1st router
+  reg r_w_1 = 1 ;
+  reg r_n_1 = 1 ;
+  reg r_s_1 = 1 ;
+  reg r_t_1 = 1 ;
+  
+  
          
         localparam LOC_X = 3'b111;                                                  //  Address of this router
         localparam LOC_Y = 3'b111;                                                  //  + can be changed accordingly
@@ -2093,7 +2101,7 @@ module router_new(
         
         
            
-           if (temp_n[105]==0)                                        // flit type -check
+           if (temp_n[105]==0 && temp_n == bf_in_n)                                        // flit type -check
         
                begin : M2
           
@@ -2245,38 +2253,43 @@ module router_new(
               end   // M2
               
               
-            else  if (temp_n[105]==1)                                        // flit type -check
+            else  if (temp_n[105]==1 && temp_n == bf_in_n)                                        // flit type -check
         
                begin : g1
                  
                  if(temp_n[127:125] == LOC_X && temp_n[124:122] == LOC_Y )
                     
                     begin : y1
+                    
                  
                  case (temp_n[104:102]) 
                  
                     East : 
                           begin
                           trust_e = trust_e +1;
-                          temp_n [104:87] = {temp_n[101:87],3'b000};                          
+                          temp_n [104:87] = {temp_n[101:87],n_a}; 
+                          north_route           = LOCAL ;                  
                           end
                    
                     West : 
                           begin
                           trust_w = trust_w +1 ;
-                          temp_n [104:87] = {temp_n[101:87],3'b000};
+                          temp_n [104:87] = {temp_n[101:87],n_a};
+                          north_route           = LOCAL ;
                           end
                    
                     South : 
                            begin
                            trust_s = trust_s +1;
-                           temp_n [104:87] = {temp_n[101:87],3'b000};
+                           temp_n [104:87] = {temp_n[101:87],n_a};
+                           north_route           = LOCAL ;
                            end
                     
                     North :
                            begin
                            trust_n = trust_n +1;
-                           temp_n [104:87] = {temp_n[101:87],3'b000};
+                           temp_n [104:87] = {temp_n[101:87],n_a};
+                           north_route           = LOCAL ;
                            end      
                                               
                     default: begin
@@ -2285,21 +2298,21 @@ module router_new(
                                     
                
                endcase
-               
+                             
                
                end   // y1
                
                
-               else
+               else if (temp_n[127:125] != LOC_X && temp_n[124:122] != LOC_Y || temp_n[127:125] != LOC_X && temp_n[124:122] == LOC_Y || temp_n[127:125] == LOC_X && temp_n[124:122] != LOC_Y && r_n_1 == 1)                                                                     // make it as if else for 1st and other routers
                
                  begin : h1
                    
                    case(temp_n[104:102])
                    
                    East : north_route = WEST;
-                   West : north_route = EAST;
-                   North : north_route = SOUTH;
-                   West : north_route = EAST;
+                   West : north_route = EAST;                                              // if it is the 1st router only route has to be computed 
+                   North : north_route = SOUTH;                                           // no need for trust incrementation
+                   South : north_route = NORTH;
                    default : 
                           
                           begin
@@ -2307,9 +2320,70 @@ module router_new(
                          
                    endcase
                   
-                   temp_n [104:87] = {temp_n[101:87],n_a};
+                  r_n_1 = 0 ;
                    
                  end    // h1
+               
+               
+               else if (temp_n[127:125] != LOC_X && temp_n[124:122] != LOC_Y || temp_n[127:125] != LOC_X && temp_n[124:122] == LOC_Y || temp_n[127:125] == LOC_X && temp_n[124:122] != LOC_Y && r_n_1 == 0)                                                                     // make it as if else for 1st and other routers
+               
+                 begin : h2                                              // if it is not the 1st router route has to be computed and trust has to be incremented 
+                   
+                   case(temp_n[104:102])
+                   
+                   East : 
+                          begin                  
+                  trust_e = trust_e +1;
+                          end
+                   West : 
+                          begin
+                   trust_w = trust_w +1;
+                          end
+                   North : 
+                          begin
+                    trust_n = trust_n +1;
+                          end
+                   South :
+                          begin
+                   trust_s = trust_s +1;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                   
+                   temp_n [104:87] = {temp_n[101:87],n_a};                   // right shifted before computing route for the next hop
+                   
+                   case(temp_n[104:102])
+                   
+                   East : 
+                          begin                  
+                   north_route = WEST;
+                          end
+                   West : 
+                          begin
+                   north_route = EAST;
+                          end
+                   North : 
+                          begin
+                          north_route = SOUTH;
+                          end
+                   South :
+                          begin
+                    north_route = NORTH;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                  
+                   
+                   
+                 end    // h2
                
                
                end     // g1
@@ -2319,7 +2393,7 @@ module router_new(
               
               
               
-              if (temp_s[105]==0)                                        // flit type -check
+              if (temp_s[105]==0  && temp_s == bf_in_s)                                        // flit type -check
         
                begin : M3
               
@@ -2328,7 +2402,7 @@ module router_new(
                       
                         begin  :b1
                         
-                        if(trust_e < trust_n)                                       
+                        if(trust_e > trust_n)                                       
                               begin                                                                                                             
                                  south_route          =  EAST;  
                                  temp_s[104:87] = {East, temp_s[104:90]};
@@ -2351,7 +2425,7 @@ module router_new(
                
                         begin  :b2
                         
-                        if(trust_w < trust_s)                                       
+                        if(trust_w > trust_s)                                       
                               begin                                                                                                             
                                  south_route           =  WEST; 
                                  temp_s [104:87] = {West, temp_s[104:90]};
@@ -2374,7 +2448,7 @@ module router_new(
                       
                               begin  :b9
                         
-                        if(trust_w < trust_n)                                       
+                        if(trust_w > trust_n)                                       
                               begin                                                                                                             
                                  south_route           =  WEST;
                                  temp_s [104:87] = {West, temp_s[104:90]};
@@ -2397,7 +2471,7 @@ module router_new(
                       
                               begin  :b0
                         
-                        if(trust_e < trust_s)                                       
+                        if(trust_e > trust_s)                                       
                               begin                                                                                                             
                                  south_route           =  EAST;  
                                  temp_s[104:87] = {East, temp_s[104:90]};
@@ -2469,7 +2543,7 @@ module router_new(
             
             
             
-             else  if (temp_s[105]==1)                                        // flit type -check
+             else  if (temp_s[105]==1  && temp_s == bf_in_s)                                        // flit type -check
         
                begin : g2
                  
@@ -2482,25 +2556,29 @@ module router_new(
                     East : 
                           begin
                           trust_e = trust_e +1;
-                          temp_s [104:87] = {temp_s[101:87],3'b000};                          
+                          temp_s [104:87] = {temp_s[101:87],n_a};   
+                          south_route           = LOCAL ;                       
                           end
                    
                     West : 
                           begin
                           trust_w = trust_w +1 ;
-                          temp_s [104:87] = {temp_s[101:87],3'b000};
+                          temp_s [104:87] = {temp_s[101:87],n_a};
+                          south_route           = LOCAL ; 
                           end
                    
                     South : 
                            begin
                            trust_s = trust_s +1;
-                           temp_s [104:87] = {temp_s[101:87],3'b000};
+                           temp_s [104:87] = {temp_s[101:87],n_a};
+                           south_route           = LOCAL ; 
                            end
                     
                     North :
                            begin
                            trust_n = trust_n +1;
-                           temp_s [104:87] = {temp_s[101:87],3'b000};
+                           temp_s [104:87] = {temp_s[101:87],n_a};
+                           south_route           = LOCAL ; 
                            end      
                                               
                     default: begin
@@ -2513,16 +2591,18 @@ module router_new(
                
                end   // y2
                
-                else
+                
+                
+           else if (temp_s[127:125] != LOC_X && temp_s[124:122] != LOC_Y || temp_s[127:125] != LOC_X && temp_s[124:122] == LOC_Y || temp_s[127:125] == LOC_X && temp_s[124:122] != LOC_Y && r_s_1 == 1)                                                                     // make it as if else for 1st and other routers
                
                  begin : h1
                    
                    case(temp_s[104:102])
                    
-                   East : north_route = WEST;
-                   West : north_route = EAST;
-                   North : north_route = SOUTH;
-                   West : north_route = EAST;
+                   East : south_route = WEST;
+                   West : south_route = EAST;                                              // if it is the 1st router only route has to be computed 
+                   North : south_route = SOUTH;                                           // no need for trust incrementation
+                   South : south_route = NORTH;
                    default : 
                           
                           begin
@@ -2530,13 +2610,77 @@ module router_new(
                          
                    endcase
                   
-                   temp_s [104:87] = {temp_s[101:87],n_a};
+                  r_s_1 = 0 ;
                    
                  end    // h1
                
                
+               else if (temp_s[127:125] != LOC_X && temp_s[124:122] != LOC_Y || temp_s[127:125] != LOC_X && temp_s[124:122] == LOC_Y || temp_s[127:125] == LOC_X && temp_s[124:122] != LOC_Y && r_s_1 == 0)                                                                     // make it as if else for 1st and other routers
+               
+                 begin : h2                                              // if it is not the 1st router route has to be computed and trust has to be incremented 
+                   
+                   case(temp_s[104:102])
+                   
+                   East : 
+                          begin                  
+                  trust_e = trust_e +1;
+                          end
+                   West : 
+                          begin
+                   trust_w = trust_w +1;
+                          end
+                   North : 
+                          begin
+                    trust_n = trust_n +1;
+                          end
+                   South :
+                          begin
+                   trust_s = trust_s +1;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                   
+                   temp_s [104:87] = {temp_s[101:87],n_a};                   // right shifted before computing route for the next hop
+                   
+                   case(temp_s[104:102])
+                   
+                   East : 
+                          begin                  
+                   south_route = WEST;
+                          end
+                   West : 
+                          begin
+                   south_route = EAST;
+                          end
+                   North : 
+                          begin
+                   south_route = SOUTH;
+                          end
+                   South :
+                          begin
+                    south_route = NORTH;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                  
+                   
+                   
+                 end    // h2
+                
+                
+               
+               
                end     // g2
                
+      
                
         
         // route computation for west port
@@ -2550,7 +2694,7 @@ module router_new(
                       
                         begin  :d1
                         
-                        if(trust_e < trust_n)                                       
+                        if(trust_e > trust_n)                                       
                               begin                                                                                                             
                                  west_route           =  EAST;  
                                  temp_w[104:87] = {East, temp_w[104:90]};
@@ -2573,7 +2717,7 @@ module router_new(
                
                         begin  :c2
                         
-                        if(trust_w < trust_s)                                       
+                        if(trust_w > trust_s)                                       
                               begin                                                                                                             
                                  west_route           =  WEST;  
                                  temp_w[104:87] = {West, temp_w[104:90]};
@@ -2596,7 +2740,7 @@ module router_new(
                       
                               begin  :c9
                         
-                        if(trust_w < trust_n)                                       
+                        if(trust_w > trust_n)                                       
                               begin                                                                                                             
                                  west_route           =  WEST; 
                                  temp_w[104:87] = {West, temp_w[104:90]}; 
@@ -2620,7 +2764,7 @@ module router_new(
                       
                               begin  :c0
                         
-                        if(trust_e < trust_s)                                       
+                        if(trust_e > trust_s)                                       
                               begin                                                                                                             
                                  west_route           =  EAST;
                                  temp_w[104:87] = {East, temp_w[104:90]};  
@@ -2706,25 +2850,29 @@ module router_new(
                     East : 
                           begin
                           trust_e = trust_e +1;
-                          temp_w [104:87] = {temp_w[101:87],3'b000};                          
+                          temp_w [104:87] = {temp_w[101:87],n_a};
+                          west_route           = LOCAL ;                           
                           end
                    
                     West : 
                           begin
                           trust_w = trust_w +1 ;
-                          temp_w [104:87] = {temp_w[101:87],3'b000};
+                          temp_w [104:87] = {temp_w[101:87],n_a};
+                          west_route           = LOCAL ;
                           end
                    
                     South : 
                            begin
                            trust_s = trust_s +1;
-                           temp_w [104:87] = {temp_w[101:87],3'b000};
+                           temp_w [104:87] = {temp_w[101:87],n_a};
+                           west_route           = LOCAL ;
                            end
                     
                     North :
                            begin
                            trust_n = trust_n +1;
-                           temp_w [104:87] = {temp_w[101:87],3'b000};
+                           temp_w [104:87] = {temp_w[101:87],n_a};
+                           west_route           = LOCAL ;
                            end      
                                               
                     default: begin
@@ -2737,16 +2885,17 @@ module router_new(
                
                end   // y1
                
-                else
+                
+            else if (temp_w[127:125] != LOC_X && temp_w[124:122] != LOC_Y || temp_w[127:125] != LOC_X && temp_w[124:122] == LOC_Y || temp_w[127:125] == LOC_X && temp_w[124:122] != LOC_Y && r_w_1 == 1)                                                                     // make it as if else for 1st and other routers
                
                  begin : h1
                    
                    case(temp_w[104:102])
                    
-                   East : north_route = WEST;
-                   West : north_route = EAST;
-                   North : north_route = SOUTH;
-                   West : north_route = EAST;
+                   East : west_route = WEST;
+                   West : west_route = EAST;                                              // if it is the 1st router only route has to be computed 
+                   North : west_route = SOUTH;                                           // no need for trust incrementation
+                   South : west_route = NORTH;
                    default : 
                           
                           begin
@@ -2754,18 +2903,83 @@ module router_new(
                          
                    endcase
                   
-                   temp_w [104:87] = {temp_w[101:87],n_a};
+                  r_w_1 = 0 ;
                    
                  end    // h1
+               
+               
+               else if (temp_w[127:125] != LOC_X && temp_w[124:122] != LOC_Y || temp_w[127:125] != LOC_X && temp_w[124:122] == LOC_Y || temp_w[127:125] == LOC_X && temp_w[124:122] != LOC_Y && r_w_1 == 0)                                                                     // make it as if else for 1st and other routers
+               
+                 begin : h2                                              // if it is not the 1st router route has to be computed and trust has to be incremented 
+                   
+                   case(temp_w[104:102])
+                   
+                   East : 
+                          begin                  
+                  trust_e = trust_e +1;
+                          end
+                   West : 
+                          begin
+                   trust_w = trust_w +1;
+                          end
+                   North : 
+                          begin
+                    trust_n = trust_n +1;
+                          end
+                   South :
+                          begin
+                   trust_s = trust_s +1;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                   
+                   temp_w [104:87] = {temp_w[101:87],n_a};                   // right shifted before computing route for the next hop
+                   
+                   case(temp_w[104:102])
+                   
+                   East : 
+                          begin                  
+                   west_route = WEST;
+                          end
+                   West : 
+                          begin
+                   west_route = EAST;
+                          end
+                   North : 
+                          begin
+                    west_route = SOUTH;
+                          end
+                   South :
+                          begin
+                    west_route = NORTH;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                  
+                   
+                   
+                 end    // h2
+                
+                
                
                end     // g3
                
                
         
+        
+        
               // route computation for east port
               
               
-              if (temp_e[105]==0)                                        // flit type -check
+              if (temp_e[105]==0  && temp_e == bf_in_e)                                        // flit type -check
         
                begin : M5
               
@@ -2773,7 +2987,7 @@ module router_new(
                       
                         begin  :e1
                         
-                        if(trust_e < trust_n)                                       
+                        if(trust_e > trust_n)                                       
                               begin                                                                                                             
                                  east_route           =  EAST;  
                                  temp_e[104:87] = {East, temp_e[104:90]};
@@ -2796,7 +3010,7 @@ module router_new(
                
                         begin  :e2
                         
-                        if(trust_w < trust_s)                                       
+                        if(trust_w > trust_s)                                       
                               begin                                                                                                             
                                  east_route           =  WEST;  
                                  temp_e[104:87] = {West, temp_e[104:90]};
@@ -2819,7 +3033,7 @@ module router_new(
                       
                               begin  :e9
                         
-                        if(trust_w < trust_n)                                       
+                        if(trust_w > trust_n)                                       
                               begin                                                                                                             
                                  east_route           =  WEST;
                                  temp_e[104:87] = {West, temp_e[104:90]};
@@ -2842,7 +3056,7 @@ module router_new(
                       
                               begin  :e0
                         
-                        if(trust_e < trust_s)                                       
+                        if(trust_e > trust_s)                                       
                               begin                                                                                                             
                                  east_route           =  EAST; 
                                  temp_e[104:87] = {East, temp_e[104:90]};
@@ -2917,7 +3131,7 @@ module router_new(
                
                end   // M5
                
-                else  if (temp_e[105]==1)                                        // flit type -check
+                else  if (temp_e[105]==1 && temp_e == bf_in_e)                                        // flit type -check
         
                begin : g4
                  
@@ -2930,25 +3144,29 @@ module router_new(
                     East : 
                           begin
                           trust_e = trust_e +1;
-                          temp_e [104:87] = {temp_e[101:87],3'b000};                          
+                          temp_e [104:87] = {temp_e[101:87],n_a};     
+                          east_route           = LOCAL ;                     
                           end
                    
                     West : 
                           begin
                           trust_w = trust_w +1 ;
-                          temp_e [104:87] = {temp_e[101:87],3'b000};
+                          temp_e [104:87] = {temp_e[101:87],n_a};
+                          east_route           = LOCAL ;  
                           end
                    
                     South : 
                            begin
                            trust_s = trust_s +1;
-                           temp_e [104:87] = {temp_e[101:87],3'b000};
+                           temp_e [104:87] = {temp_e[101:87],n_a};
+                           east_route           = LOCAL ;
                            end
                     
                     North :
                            begin
                            trust_n = trust_n +1;
-                           temp_e [104:87] = {temp_e[101:87],3'b000};
+                           temp_e [104:87] = {temp_e[101:87],n_a};
+                           east_route           = LOCAL ;
                            end      
                                               
                     default: begin
@@ -2961,16 +3179,17 @@ module router_new(
                
                end   // y4
                
-                else
+              
+              else if (temp_e[127:125] != LOC_X && temp_e[124:122] != LOC_Y || temp_e[127:125] != LOC_X && temp_e[124:122] == LOC_Y || temp_e[127:125] == LOC_X && temp_e[124:122] != LOC_Y && r_e_1 == 1)                                                                     // make it as if else for 1st and other routers
                
                  begin : h1
                    
                    case(temp_e[104:102])
                    
-                   East : north_route = WEST;
-                   West : north_route = EAST;
-                   North : north_route = SOUTH;
-                   West : north_route = EAST;
+                   East : east_route = WEST;
+                   West : east_route = EAST;                                              // if it is the 1st router only route has to be computed 
+                   North : east_route = SOUTH;                                           // no need for trust incrementation
+                   South : east_route = NORTH;
                    default : 
                           
                           begin
@@ -2978,9 +3197,70 @@ module router_new(
                          
                    endcase
                   
-                   temp_e [104:87] = {temp_e[101:87],n_a};
+                  r_e_1 = 0 ;
                    
                  end    // h1
+               
+               
+               else if (temp_e[127:125] != LOC_X && temp_e[124:122] != LOC_Y || temp_e[127:125] != LOC_X && temp_e[124:122] == LOC_Y || temp_e[127:125] == LOC_X && temp_e[124:122] != LOC_Y && r_e_1 == 0)                                                                     // make it as if else for 1st and other routers
+               
+                 begin : h2                                              // if it is not the 1st router route has to be computed and trust has to be incremented 
+                   
+                   case(temp_e[104:102])
+                   
+                   East : 
+                          begin                  
+                  trust_e = trust_e +1;
+                          end
+                   West : 
+                          begin
+                   trust_w = trust_w +1;
+                          end
+                   North : 
+                          begin
+                    trust_n = trust_n +1;
+                          end
+                   South :
+                          begin
+                   trust_s = trust_s +1;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                   
+                   temp_e [104:87] = {temp_e[101:87],n_a};                   // right shifted before computing route for the next hop
+                   
+                   case(temp_e[104:102])
+                   
+                   East : 
+                          begin                  
+                   east_route = WEST;
+                          end
+                   West : 
+                          begin
+                   east_route = EAST;
+                          end
+                   North : 
+                          begin
+                   east_route = SOUTH;
+                          end
+                   South :
+                          begin
+                    east_route = NORTH;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                  
+                   
+                   
+                 end    // h2
                
                end     // g4
                
@@ -2990,7 +3270,7 @@ module router_new(
                // route computation for local port
               
               
-              if (temp_t[105]==0)                                        // flit type -check
+              if (temp_t[105]==0  && temp_t == bf_in_t)                                        // flit type -check
         
                begin : M6
               
@@ -2998,7 +3278,7 @@ module router_new(
                       
                         begin  :t1
                         
-                        if(trust_e < trust_n)                                       
+                        if(trust_e > trust_n)                                       
                               begin                                                                                                             
                                  local_route           =  EAST;  
                                  temp_t[104:87] = {East, temp_t[104:90]};
@@ -3021,7 +3301,7 @@ module router_new(
                
                         begin  :t2
                         
-                        if(trust_w < trust_s)                                       
+                        if(trust_w > trust_s)                                       
                               begin                                                                                                             
                                  local_route           =  WEST;  
                                  temp_t[104:87] = {West, temp_t[104:90]};
@@ -3044,7 +3324,7 @@ module router_new(
                       
                               begin  :t9
                         
-                        if(trust_w < trust_n)                                       
+                        if(trust_w > trust_n)                                       
                               begin                                                                                                             
                                  local_route           =  WEST;  
                                  temp_t[104:87] = {West, temp_t[104:90]};
@@ -3068,7 +3348,7 @@ module router_new(
                       
                               begin  :t0
                         
-                        if(trust_e < trust_s)                                       
+                        if(trust_e > trust_s)                                       
                               begin                                                                                                             
                                 local_route         =  EAST; 
                                 temp_t[104:87] = {East, temp_t[104:90]};
@@ -3141,7 +3421,7 @@ module router_new(
            end   // M6
            
            
-            else  if (temp_n[105]==1)                                        // flit type -check
+            else  if (temp_t[105]==1 &&  temp_t == bf_in_t)                                        // flit type -check
         
                begin : g5
                  
@@ -3154,25 +3434,29 @@ module router_new(
                     East : 
                           begin
                           trust_e = trust_e +1;
-                          temp_t [104:87] = {temp_t[101:87],3'b000};                          
+                          temp_t [104:87] = {temp_t[101:87],n_a};  
+                          local_route           = LOCAL ;                        
                           end
                    
                     West : 
                           begin
                           trust_w = trust_w +1 ;
-                          temp_t [104:87] = {temp_t[101:87],3'b000};
+                          temp_t [104:87] = {temp_t[101:87],n_a};
+                          local_route           = LOCAL ;
                           end
                    
                     South : 
                            begin
                            trust_s = trust_s +1;
-                           temp_t [104:87] = {temp_t[101:87],3'b000};
+                           temp_t [104:87] = {temp_t[101:87],n_a};
+                           local_route           = LOCAL ;
                            end
                     
                     North :
                            begin
                            trust_n = trust_n +1;
-                           temp_t [104:87] = {temp_t[101:87],3'b000};
+                           temp_t [104:87] = {temp_t[101:87],n_a};
+                           local_route           = LOCAL ;
                            end      
                                               
                     default: begin
@@ -3185,16 +3469,17 @@ module router_new(
                
                end   // y1
                
-                else
+                
+              else if (temp_t[127:125] != LOC_X && temp_t[124:122] != LOC_Y || temp_t[127:125] != LOC_X && temp_t[124:122] == LOC_Y || temp_t[127:125] == LOC_X && temp_t[124:122] != LOC_Y && r_t_1 == 1)                                                                     // make it as if else for 1st and other routers
                
                  begin : h1
                    
                    case(temp_t[104:102])
                    
-                   East : north_route = WEST;
-                   West : north_route = EAST;
-                   North : north_route = SOUTH;
-                   West : north_route = EAST;
+                   East : local_route = WEST;
+                   West : local_route = EAST;                                              // if it is the 1st router only route has to be computed 
+                   North : local_route = SOUTH;                                           // no need for trust incrementation
+                   South : local_route = NORTH;
                    default : 
                           
                           begin
@@ -3202,9 +3487,70 @@ module router_new(
                          
                    endcase
                   
-                   temp_t [104:87] = {temp_t[101:87],n_a};
+                  r_t_1 = 0 ;
                    
                  end    // h1
+               
+               
+               else if (temp_t[127:125] != LOC_X && temp_t[124:122] != LOC_Y || temp_t[127:125] != LOC_X && temp_t[124:122] == LOC_Y || temp_t[127:125] == LOC_X && temp_t[124:122] != LOC_Y && r_t_1 == 0)                                                                     // make it as if else for 1st and other routers
+               
+                 begin : h2                                              // if it is not the 1st router route has to be computed and trust has to be incremented 
+                   
+                   case(temp_t[104:102])
+                   
+                   East : 
+                          begin                  
+                  trust_e = trust_e +1;
+                          end
+                   West : 
+                          begin
+                   trust_w = trust_w +1;
+                          end
+                   North : 
+                          begin
+                    trust_n = trust_n +1;
+                          end
+                   South :
+                          begin
+                   trust_s = trust_s +1;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                   
+                   temp_t[104:87] = {temp_t[101:87],n_a};                   // right shifted before computing route for the next hop
+                   
+                   case(temp_t[104:102])
+                   
+                   East : 
+                          begin                  
+                   local_route = WEST;
+                          end
+                   West : 
+                          begin
+                   local_route = EAST;
+                          end
+                   North : 
+                          begin
+                   local_route = SOUTH;
+                          end
+                   South :
+                          begin
+                    local_route = NORTH;
+                          end
+                   default : 
+                          
+                          begin
+                          end
+                         
+                   endcase
+                  
+                   
+                   
+                 end    // h2
                
                end     // g1
                
@@ -3214,13 +3560,7 @@ module router_new(
         end    // M1
         
         
-        
-        
-        
-        
-        
-     
-  
+
   
   
 /*---------------------------------------------------VC Allocation Unit-------------------------------------------------------------*/
